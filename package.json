@@ -1,0 +1,12 @@
+{
+  "name": "shared-dictionary",
+  "version": "1.0.0",
+  "main": "index.js",
+  "devDependencies": {
+    "bun-types": "^1.0.5-canary.20231008T140131"
+  },
+  "scripts": {
+    "start": "bun server.ts"
+  },
+  "license": "MIT"
+}
