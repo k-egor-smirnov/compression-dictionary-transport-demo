@@ -15,4 +15,5 @@ In this demo showed process of delta encoding static files with zstd and the new
   - [chrome://flags#enable-compression-dictionary-transport-backend](chrome://flags/#enable-compression-dictionary-transport-backend)
   - [chrome://flags/#enable-zstd-content-encoding](chrome://flags/#enable-zstd-content-encoding)
   - [chrome://flags/#enable-shared-zstd](chrome://flags/#enable-shared-zstd)
-- Run `bun start` and open `https://localhost`
+- Add new entry to `/etc/hosts` with custom domain pointing to localhost e.g `127.0.0.1 test.local`
+- Run `bun start` and open `https://test.local` (your custom domain here)
