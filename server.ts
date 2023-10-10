@@ -74,6 +74,7 @@ function serveJS(req: Request) {
     "Content-Encoding": isDictionaryUsed ? "zstd-d" : "zstd",
     "Content-Type": "text/javascript",
     "Vary": "sec-available-dictionary",
+    "Cache-Control": "no-cache",
   };
 
   if (fileStableID) {
