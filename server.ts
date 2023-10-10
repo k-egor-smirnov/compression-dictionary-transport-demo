@@ -32,32 +32,7 @@ async function serveHTML(req: Request) {
   });
 }
 
-const BASIC_JS_HEADERS: HeadersInit = {};
-
-function getEncodingNotSupportedText(encoding: string) {
-  return `
-;(() => {
-  if (window.__alert_shown) {
-    return;
-  }
-  window.__alert_shown = true;
-
-  alert('Your browser is not supporting ${encoding}! Use Chrome Canary or enable it in chrome://#flags');
-})();
-`;
-}
-
 function serveJS(req: Request) {
-  if (!req.headers.get("Accept-Encoding").includes("zstd-d")) {
-    return new Response(getEncodingNotSupportedText("zstd-d"), {
-      headers: BASIC_JS_HEADERS,
-    });
-  } else if (!req.headers.get("Accept-Encoding").includes("zstd")) {
-    return new Response(getEncodingNotSupportedText("zstd"), {
-      headers: BASIC_JS_HEADERS,
-    });
-  }
-
   const url = new URL(req.url);
   const { pathname } = url;
 
@@ -96,8 +71,8 @@ function serveJS(req: Request) {
   }
 
   const headers: HeadersInit = {
-    ...BASIC_JS_HEADERS,
     "Content-Encoding": isDictionaryUsed ? "zstd-d" : "zstd",
+    "Content-Type": "text/javascript",
     "Vary": "sec-available-dictionary",
   };
 
