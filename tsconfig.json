@@ -1,5 +1,9 @@
 {
   "compilerOptions": {
-    "types": ["bun-types"]
-  }
+    "target": "es2022",
+    "module": "ES2022",
+    "types": [
+      "bun-types"
+    ]
+  },
 }

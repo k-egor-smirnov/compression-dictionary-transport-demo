@@ -8,59 +8,110 @@ async function touchFileHash(path: string, file: import("bun").BunFile) {
     return;
   }
 
-  const text = await file.text();
+  const buf = await file.arrayBuffer();
 
   const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(text);
+  hasher.update(buf);
   hashesByFile[path] = hasher.digest("hex");
   filesByHash[hashesByFile[path]] = path;
 
   console.log("new file hash %s: %s", path, hashesByFile[path]);
 }
 
+function serveHTML(req: Request) {
+  const url = new URL(req.url);
+  const file = url.pathname === "/" ? "index.html" : url.pathname;
+  return new Response(Bun.file("./static/" + file), {
+    headers: {
+      Link: '</dict.dat>; rel="dictionary";',
+    },
+  });
+}
+
+function serveJS(req: Request) {
+  const url = new URL(req.url);
+  const { pathname } = url;
+
+  const file = Bun.file("./static" + pathname);
+  const serverPath = "./static" + pathname;
+
+  // Saving file hash to cache. Could be preloaded on server start
+  touchFileHash(serverPath, file);
+
+  // Unique id that keeps between different file builds
+  const fileStableID = /id-(.+?)[\.]/.exec(pathname)?.[1];
+
+  const dictionaryHash = req.headers.get("sec-available-dictionary");
+  const dictionaryContentServerPath = filesByHash[dictionaryHash];
+
+  let buf: Buffer;
+  let isDictionaryUsed = false;
+
+  if (
+    dictionaryContentServerPath &&
+    dictionaryContentServerPath !== serverPath
+  ) {
+    console.log(
+      "using dictionary %s to compress %s",
+      serverPath,
+      dictionaryContentServerPath
+    );
+
+    buf = execSync(
+      `zstd -c ${serverPath} --patch-from ${dictionaryContentServerPath} -10`
+    );
+
+    isDictionaryUsed = true;
+  } else {
+    buf = execSync(`zstd -c ${serverPath} -10`);
+  }
+
+  const headers: HeadersInit = {
+    "Content-Encoding": isDictionaryUsed ? "zstd-d" : "zstd",
+    "Content-Type": "text/javascript",
+    "Vary": "sec-available-dictionary",
+  };
+
+  if (fileStableID) {
+    headers["use-as-dictionary"] = `match="/js/id-${fileStableID}*"`;
+  }
+
+  return new Response(buf, {
+    headers,
+  });
+}
+
+async function prehashFiles() {
+  const path = "./static/dict.dat";
+  await touchFileHash(path, Bun.file(path));
+}
+
+console.log("Prehashing files");
+await prehashFiles();
+
+console.log("Starting server");
+
 Bun.serve({
   fetch(req) {
     const url = new URL(req.url);
+    console.log("[%s] %s", req.method, url.pathname + url.search);
 
     if (url.pathname.endsWith(".html") || url.pathname === "/") {
-      const file = url.pathname === "/" ? "index.html" : url.pathname;
-      return new Response(Bun.file("./" + file));
+      return serveHTML(req);
     }
 
     if (url.pathname.startsWith("/js")) {
-      const file = Bun.file("./" + url.pathname);
+      return serveJS(req);
+    }
 
-      // Saving file hash to cache. Could be preloaded on server start
-      touchFileHash(url.pathname, file);
+    if (url.pathname.endsWith(".dat")) {
+      const serverPath = "./static" + url.pathname;
+      const file = Bun.file("./static" + url.pathname);
+      touchFileHash(serverPath, file);
 
-      const prevFileHash = req.headers.get("sec-available-dictionary");
-      const prevFilePath = filesByHash[prevFileHash];
-
-      let buf: Buffer;
-      let isPreviousFileUsed = false;
-
-      if (prevFilePath && prevFilePath !== url.pathname) {
-        console.log(
-          "using previous file %s to compress %s",
-          url.pathname,
-          prevFilePath
-        );
-
-        buf = execSync(
-          `zstd -c .${url.pathname} --patch-from .${prevFilePath}`
-        );
-
-        isPreviousFileUsed = true;
-      } else {
-        buf = execSync(`zstd -c ./${url.pathname}`);
-      }
-
-      return new Response(buf, {
+      return new Response(file, {
         headers: {
           "use-as-dictionary": 'match="/js/*"',
-          "Content-Encoding": isPreviousFileUsed ? "zstd-d" : "zstd",
-          "Content-Type": "text/javascript",
-          "Vary": "sec-available-dictionary",
         },
       });
     }
