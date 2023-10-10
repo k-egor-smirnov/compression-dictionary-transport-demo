@@ -8,7 +8,7 @@ async function touchFileHash(path: string, file: import("bun").BunFile) {
     return;
   }
 
-  const buf = await file.arrayBuffer();
+  const buf = await Bun.readableStreamToArrayBuffer(file.stream()); // https://github.com/oven-sh/bun/issues/1446#issuecomment-1749155027
 
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(buf);
@@ -18,12 +18,16 @@ async function touchFileHash(path: string, file: import("bun").BunFile) {
   console.log("new file hash %s: %s", path, hashesByFile[path]);
 }
 
-function serveHTML(req: Request) {
+async function serveHTML(req: Request) {
   const url = new URL(req.url);
-  const file = url.pathname === "/" ? "index.html" : url.pathname;
-  return new Response(Bun.file("./static/" + file), {
+  const filename = url.pathname === "/" ? "index.html" : url.pathname;
+  const file = Bun.file("./static/" + filename);
+
+  // https://github.com/oven-sh/bun/issues/1446#issuecomment-1749155027
+  return new Response(await Bun.readableStreamToBlob(file.stream()), {
     headers: {
-      Link: '</dict.dat>; rel="dictionary";',
+      "Link": '</dict.dat>; rel="dictionary";',
+      "Content-Type": "text/html; charset=utf-8",
     },
   });
 }
@@ -92,7 +96,7 @@ await prehashFiles();
 console.log("Starting server");
 
 Bun.serve({
-  fetch(req) {
+  async fetch(req) {
     const url = new URL(req.url);
     console.log("[%s] %s", req.method, url.pathname + url.search);
 
@@ -109,9 +113,11 @@ Bun.serve({
       const file = Bun.file("./static" + url.pathname);
       touchFileHash(serverPath, file);
 
-      return new Response(file, {
+      // https://github.com/oven-sh/bun/issues/1446#issuecomment-1749155027
+      return new Response(await Bun.readableStreamToBlob(file.stream()), {
         headers: {
           "use-as-dictionary": 'match="/js/*"',
+          "Content-Type": "application/octet-stream",
         },
       });
     }
